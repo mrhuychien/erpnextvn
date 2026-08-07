@@ -1,0 +1,48 @@
+[project]
+name = "erpnextvn"
+authors = [
+    { name = "1nguoi.com", email = "hello@1nguoi.com"}
+]
+description = "Vietnamese Localization for ERPNext v16"
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+
+# frappe / erpnext / hrms are deliberately absent. bench already installs and
+# manages them; declaring one makes this app the resolution root and drags
+# frappe in as a transitive node — and frappe's own metadata pins `pypika` to a
+# git URL, which PEP 508 forbids resolvers from following second-hand. That is
+# what breaks `bench get-app` with:
+#   Package `pypika` was included as a URL dependency.
+# The framework version is pinned under [tool.bench.frappe-dependencies] below,
+# which bench reads and pip/uv never sees.
+#
+# `requests` stays: it is a real third-party import in erpnextvn/e_invoicing/*
+# and an ordinary PyPI package with no URL dependencies of its own.
+dependencies = [
+    "requests",
+]
+
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/mrhuychien/erpnextvn"
+Repository = "https://github.com/mrhuychien/erpnextvn.git"
+"Bug Reports" = "https://github.com/mrhuychien/erpnextvn/issues"
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.frappe-dependencies]
+frappe = ">=15.0.0,<17.0.0"
+erpnext = ">=15.0.0,<17.0.0"
+hrms = ">=15.0.0,<17.0.0"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"

@@ -7,6 +7,63 @@ on:
     branches: [main, develop]
 
 jobs:
+  build:
+    name: Build (must not depend on frappe/erpnext/hrms)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install build
+        run: pip install build
+      - name: Build wheel
+        run: python -m build --wheel --outdir dist/
+      - name: Assert no framework dependency and no missing data files
+        # Declaring frappe/erpnext/hrms makes this app the resolution root and
+        # pulls frappe in transitively — frappe pins pypika to a git URL, which
+        # PEP 508 forbids resolvers from following second-hand, so `bench
+        # get-app` dies with "Package `pypika` was included as a URL
+        # dependency". bench installs the framework itself; never declare it.
+        run: |
+          python - <<'EOF'
+          import glob, subprocess, sys, zipfile
+
+          BANNED = {"frappe", "erpnext", "hrms"}
+
+          whl = glob.glob("dist/*.whl")[0]
+          with zipfile.ZipFile(whl) as z:
+              name = next(n for n in z.namelist() if n.endswith("METADATA"))
+              meta = z.read(name).decode()
+              packaged = {n for n in z.namelist() if not n.startswith("erpnextvn-")}
+
+          failed = False
+          for line in meta.splitlines():
+              if not line.startswith("Requires-Dist:"):
+                  continue
+              dep = line.split(":", 1)[1].strip()
+              root = dep.split()[0].split("[")[0].split(">")[0].split("=")[0].lower()
+              if root in BANNED:
+                  print(f"FAIL: wheel declares `{root}` — this breaks bench get-app")
+                  failed = True
+
+          # flit packages the module dir wholesale; catch any file that stops
+          # being shipped (DocType JSON, fixtures, print formats, translations).
+          tracked = {
+              f for f in subprocess.check_output(["git", "ls-files"], text=True).split()
+              if f.startswith("erpnextvn/")
+          }
+          if missing := sorted(tracked - packaged):
+              print(f"FAIL: {len(missing)} tracked file(s) missing from the wheel:")
+              for m in missing[:20]:
+                  print(f"  {m}")
+              failed = True
+
+          if failed:
+              sys.exit(1)
+          print(f"OK: no framework dependency, {len(tracked)} files packaged")
+          EOF
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
