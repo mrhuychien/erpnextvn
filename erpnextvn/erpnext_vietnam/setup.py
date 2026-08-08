@@ -5,7 +5,8 @@ This module runs:
 2. When a user selects Vietnam in the Setup Wizard (via ``setup_wizard_stages``)
 
 It loads provinces, adds custom fields, installs the Vietnam address
-template, and configures company defaults (currency, date format, taxes).
+template, enables the Vietnamese language, and configures company defaults
+(currency, date format, taxes).
 """
 
 from __future__ import annotations
@@ -27,14 +28,62 @@ def after_install() -> None:
     load_provinces()
     add_custom_fields()
     add_address_template()
+    enable_vietnamese()
     frappe.db.commit()
     print("✅ ERPNext Vietnam: Installation complete")
 
 
 def before_uninstall() -> None:
-    """Cleanup before uninstall."""
+    """Cleanup before uninstall.
+
+    Note: the ``vi`` Language record is deliberately left enabled. Another
+    Vietnamese pack (e.g. ``vinext``) may be relying on it, and uninstalling
+    this app must not turn Vietnamese off site-wide.
+    """
     delete_custom_fields()
     frappe.db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Language
+# ---------------------------------------------------------------------------
+
+
+def enable_vietnamese() -> None:
+    """Enable the ``vi`` Language record so Vietnamese becomes selectable.
+
+    Frappe ships ``vi`` **disabled** — ``frappe/geo/languages.csv`` carries the
+    row ``vi,Tiếng Việt,0`` — and ``frappe.translate.get_all_languages()``,
+    which fills the language pickers, filters on ``enabled = 1``. Frappe's own
+    ``sync_languages()`` only inserts rows that do not already exist, so it
+    never flips the flag on a later install.
+
+    Without this, installing onto an already-running site loads the
+    translations correctly yet leaves Vietnamese missing from the picker.
+    ``setup_company_vietnam`` writes ``System Settings.language`` directly, but
+    that only runs from the Setup Wizard on a fresh site.
+
+    Saving through the document rather than ``db.set_value`` lets
+    ``Language.on_update`` drop the ``languages`` and ``languages_with_name``
+    caches that ``get_all_languages()`` reads, so the language shows up without
+    a restart.
+    """
+    if frappe.db.exists("Language", "vi"):
+        doc = frappe.get_doc("Language", "vi")
+        if doc.enabled:
+            return
+        doc.enabled = 1
+        doc.save(ignore_permissions=True)
+    else:
+        # Only reachable on a site whose languages.csv predates the language.
+        frappe.get_doc(
+            {
+                "doctype": "Language",
+                "language_code": "vi",
+                "language_name": "Tiếng Việt",
+                "enabled": 1,
+            }
+        ).insert(ignore_permissions=True)
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +142,9 @@ def setup_company_vietnam(args: dict) -> None:
     except Exception as exc:
         frappe.log_error(f"create_tax_templates failed for {company}: {exc}")
 
-    # System-wide Vietnam defaults
+    # System-wide Vietnam defaults. Enable the language first, otherwise the
+    # setting below points at a Language the picker will not list.
+    enable_vietnamese()
     frappe.db.set_single_value("System Settings", "date_format", "dd/mm/yyyy")
     frappe.db.set_single_value("System Settings", "time_format", "HH:mm:ss")
     frappe.db.set_single_value("System Settings", "number_format", "#.###")

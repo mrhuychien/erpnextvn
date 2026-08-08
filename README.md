@@ -79,6 +79,28 @@ After installation:
 3. Go to **VN E Invoice Settings** and configure your HĐĐT provider (if used)
 4. Open **VN Province** to confirm 63 provinces loaded
 
+### Language
+
+Installing enables the `vi` Language record. Frappe ships it **disabled**
+(`frappe/geo/languages.csv` carries `vi,Tiếng Việt,0`) and
+`translate.get_all_languages()` — which fills the language pickers — lists only
+enabled ones, so without this step the translations load but Vietnamese never
+appears in *System Settings → Language*.
+
+The Setup Wizard path additionally sets the site language to `vi` outright. On a
+site that skipped the wizard, pick it yourself in *System Settings → Language* —
+search for **`Tiếng Việt`** or **`vi`**, since the record is named `vi` and
+titled by `language_name`; searching "Vietnamese" finds nothing. Then
+`bench --site [your-site] clear-cache`, `bench restart`, and hard-refresh
+(`Ctrl+Shift+R`) — Desk strings ride along with `bootinfo`, so a stale boot is
+the usual reason a correct catalogue looks like it did not apply.
+
+For sites installed before this was automated:
+
+```bash
+bench --site [your-site] execute erpnextvn.erpnext_vietnam.setup.enable_vietnamese
+```
+
 ## ⚙️ Configuration
 
 ### Payroll (Lương & Thuế TNCN)
